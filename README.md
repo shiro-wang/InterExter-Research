@@ -1,30 +1,10 @@
 <h1 align="center">
-InstructRAG 
+InterExterRAG 
 </h1>
 
-<h3 align="center">
-Instructing Retrieval-Augmented Generation via Self-Synthesized Rationales <br>
-[<a href="https://arxiv.org/abs/2406.13629">arXiv</a>]
-[<a href="https://weizhepei.com/instruct-rag-page/">Website</a>]
-[<a href="https://github.com/weizhepei/InstructRAG?tab=readme-ov-file#model-checkpoints">Model</a>] [<a href="https://github.com/weizhepei/InstructRAG/tree/main/dataset">Dataset</a>]
-[<a href="https://x.com/weizhepei/status/1803992285899620837">X Summary</a>]
-</h3>
+This research is mainly using the idea from InstructRAG and wanna put more research on the topic "Knowledge Conflict".
 
-InstructRAG is a simple yet effective RAG framework that allows LMs to explicitly denoise retrieved contents by generating rationales for better verifiability and trustworthiness. 
-
-![](https://weizhepei.com/instruct-rag-page/static/images/instructrag.png)
-
-## **InstructRAG Key Features:**
-
-- 🤖 **Self-Synthesis**: Leverage instruction-tuned LMs to generate their OWN supervision for denoising.
-- 🔌 **Easy-to-Use**: Support both in-context learning (ICL) and supervised fine-tuning (SFT).
-- 🚀 **Effectiveness**: Up to 8.3% better results across 5 benchmarks ([Table 3](https://arxiv.org/html/2406.13629v2#S3.T3)).
-- 💪 **Noise Robustness**: Robust to increased noise ratios in various scenarios ([Figure 3](https://arxiv.org/html/2406.13629v2#S3.F3)).
-- 🔁 **Task Transferability**: InstructRAG can also solve out-of-domain unseen tasks ([Figure 4](https://arxiv.org/html/2406.13629v2#S3.F4)).
-
-Please see also our [paper](https://arxiv.org/abs/2406.13629) and [X summary](https://x.com/weizhepei/status/1803992285899620837) for more details.
-
-## 🔗 Quick Links
+## Quick Links
 - [InstructRAG: Instructing Retrieval-Augmented Generation via Self-Synthesized Rationales](#instructrag-key-features)
     - [Installation](#installation)
     - [Training Script](#training-script)
@@ -81,11 +61,7 @@ Below is the full list of InstructRAG models fine-tuned on each dataset in our w
 | ASQA | [meng-lab/ASQA-InstructRAG-FT](https://huggingface.co/meng-lab/ASQA-InstructRAG-FT) | GTR |
 | 2WikiMultiHopQA | [meng-lab/2WikiMultiHopQA-InstructRAG-FT](https://huggingface.co/meng-lab/2WikiMultiHopQA-InstructRAG-FT) | BM25 |
 
-## Bugs or Questions?
-If you have any questions related to the code or the paper, feel free to email Zhepei (zhepei.wei@virginia.edu). If you encounter any problems when using the code, or want to report a bug, feel free to open an issue! Please try to specify the problem with details so we can help you better and quicker!
-
 ## Citation
-Please cite our paper if you find the repo helpful in your work:
 
 ```bibtex
 @inproceedings{
