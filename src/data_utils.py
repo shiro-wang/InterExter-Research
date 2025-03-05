@@ -79,7 +79,7 @@ def make_supervised_data(
     
     prompt_dict = common_utils.jload(data_args.prompt_dict_path)
 
-    data_path = os.path.join('dataset', data_args.dataset_name, 'train.json')
+    data_path = os.path.join(data_args.dataset_path, 'eval_results/InstructRAG-ICL', data_args.dataset_name, 'with_rationale/train_inter_exter.json')
     logger.warning(f"Loading training set from: {data_path}")
     data_list = common_utils.jload(data_path)
 
@@ -103,7 +103,7 @@ def normalize_question(question):
     return question[0].lower() + question[1:]
 
 
-def build_contexts(example, n_docs):
+def build_contexts(example, n_docs, internal=False):
 
     if len(example["ctxs"]) > 0 and example["ctxs"][0]["score"] > example["ctxs"][1]["score"]:
         ctxs_list = example["ctxs"][:n_docs][::-1]
@@ -111,6 +111,10 @@ def build_contexts(example, n_docs):
         ctxs_list = example["ctxs"][:n_docs]
 
     docs_text = "\n\n".join([f"Document {idx+1} (Title: {ctx['title']}): {ctx['text']}" for idx, ctx in enumerate(ctxs_list)])
+    
+    if internal:
+        docs_text += f"\n\nDocument {len(ctxs_list)+1} (Internal Knowledge): {example['internal_knowledge']}"
+        
     doc_prompt = f"{docs_text}\n\n"
     
     return doc_prompt
@@ -121,6 +125,7 @@ def preprocess_for_rag(
     prompt_dict: dict,
     tokenizer: transformers.PreTrainedTokenizer,
     n_docs: int,
+    internal: bool = False,
     verbose=True,
 ) -> dict[str, Union[torch.Tensor, Sequence[torch.Tensor]]]:
     """Preprocess the data by tokenizing."""
@@ -136,8 +141,8 @@ def preprocess_for_rag(
     user_prefix_len = len(user_prefix_id)
 
     for sample in data_list:
-        query_prompt = prompt_dict['query_prompt'] + normalize_question(sample['question'])
-        doc_prompt = build_contexts(sample, n_docs=n_docs)
+        query_prompt = prompt_dict['query_prompt_inter_exter'].format(question=normalize_question(sample['question']))
+        doc_prompt = build_contexts(sample, n_docs=n_docs, internal=internal)
         sources.append(doc_prompt + query_prompt)
     
         target_prompt = assistant_prefix + sample['rationale'] + tokenizer.eos_token
@@ -302,6 +307,117 @@ def format_prompt(
     formatted_prompt = tokenizer.decode(input_ids[0], skip_special_tokens=False)
     return formatted_prompt
 
+def format_prompt_inter_exter(
+        dataset_name: str,
+        example: dict, 
+        n_docs: int,
+        prompt_dict: dict,
+        tokenizer: transformers.PreTrainedTokenizer,
+        do_internal_generation: bool,
+        do_rationale_generation: bool,
+        demos: list = [],
+        ) -> str:
+    """Formats a prompt with a prompt_dict formatter in inter_exter version.
+
+    Args:
+        example: A dict-like object with required keys "instruction" and "input"
+        prompt_dict: Dictionary containing the keys "prompt_noinputs" and "prompt_inputs" which have
+            placeholders corresponding to the keys from `example`. E.g. "{instruction}".
+
+    Returns:
+        A formatted prompt string with inter_exter docs.
+
+    Examples
+    --------
+    >>> format_prompt(dict(instruction="test", input=""), prompt_dict=dict(prompt_noinputs="prompt {instruction} "))
+    "prompt test"
+    """
+    example['question'] = normalize_question(example['question'])
+    max_length = tokenizer.model_max_length
+
+    query_prompt = prompt_dict['query_prompt_inter_exter'].format_map(example)
+    target_prefix = ""
+
+    doc_prompt = build_contexts(example, n_docs=n_docs, internal= not do_internal_generation)
+
+    prefix = prompt_dict['user_prefix']
+
+    if do_internal_generation:
+        query_prompt = ''
+        prefix += prompt_dict['internal_generation_instruction'].format_map(example)
+    
+    elif do_rationale_generation:
+        query_prompt = ''
+        target_prefix += prompt_dict['rationale_generation_instruction_inter_exter'].format_map(example) + prompt_dict['rationale_generation_postfix_' + dataset_name]
+
+    elif len(demos) > 0:
+        prefix += prompt_dict['demo_task_instruction']
+
+        for idx, demo in enumerate(demos):
+            demo_question = normalize_question(demo['question'])
+            demo_rationale = demo['rationale']
+            prefix += f"###\n\nExample {idx+1}\n\nQuestion: {demo_question}\n\nAnswer: {demo_rationale}\n\n"
+
+        prefix += prompt_dict['demo_postfix']
+
+    prefix_tokenized_id = tokenizer(prefix, return_tensors="pt", add_special_tokens=True).input_ids
+    prefix_len = len(prefix_tokenized_id)
+
+    target_prefix += prompt_dict['assistant_prefix']
+    if do_internal_generation:
+        input_ids = tokenizer(query_prompt + target_prefix, return_tensors="pt", add_special_tokens=False).input_ids
+    else:
+        input_ids = tokenizer(doc_prompt + query_prompt + target_prefix, return_tensors="pt", add_special_tokens=False).input_ids
+
+    if input_ids.shape[-1] > max_length - prefix_len:
+        input_ids = input_ids[..., -(max_length - prefix_len):]
+    input_ids = torch.cat([prefix_tokenized_id, input_ids], axis=-1)
+    
+    formatted_prompt = tokenizer.decode(input_ids[0], skip_special_tokens=False)
+    return formatted_prompt
+
+def format_prompt_vanilla(
+    dataset_name: str,
+        example: dict, 
+        n_docs: int,
+        prompt_dict: dict,
+        tokenizer: transformers.PreTrainedTokenizer,
+        demos: list = [],
+        ) -> str:
+    """Formats a prompt with a prompt_dict formatter.
+    """
+    example['question'] = normalize_question(example['question'])
+    max_length = tokenizer.model_max_length
+
+    query_prompt = prompt_dict['query_prompt'].format_map(example)
+    target_prefix = ""
+
+    doc_prompt = build_contexts(example, n_docs=n_docs)
+
+    prefix = prompt_dict['user_prefix']
+    
+    if len(demos) > 0:
+        for idx, demo in enumerate(demos):
+            demo_question = normalize_question(demo['question'])
+            demo_answer = ", ".join(ans for ans in demo['answers'])
+            prefix += f"###\n\nExample {idx+1}\n\nQuestion: {demo_question}\n\nAnswer: {demo_answer}\n\n"
+
+        prefix += prompt_dict['demo_postfix']
+
+    prefix_tokenized_id = tokenizer(prefix, return_tensors="pt", add_special_tokens=True).input_ids
+    prefix_len = len(prefix_tokenized_id)
+
+    target_prefix += prompt_dict['assistant_prefix']
+
+    input_ids = tokenizer(doc_prompt + query_prompt + target_prefix, return_tensors="pt", add_special_tokens=False).input_ids
+
+    if input_ids.shape[-1] > max_length - prefix_len:
+        input_ids = input_ids[..., -(max_length - prefix_len):]
+    input_ids = torch.cat([prefix_tokenized_id, input_ids], axis=-1)
+    
+    formatted_prompt = tokenizer.decode(input_ids[0], skip_special_tokens=False)
+    return formatted_prompt
+
 def format_prompt_with_data_list(
     data_list: list[dict],
     dataset_name: str,
@@ -310,10 +426,18 @@ def format_prompt_with_data_list(
     n_docs: int = 5,
     demos: list = [],
     do_rationale_generation: bool = False,
+    do_internal_generation: bool = False,
+    do_inter_exter: bool = False,
+    do_vanilla: bool = False,
 ):
 
     data = copy.deepcopy(data_list)
     logger.warning(f"Formatting prompts...")
-    formatted_data = [format_prompt(dataset_name, example, n_docs, prompt_dict, tokenizer, do_rationale_generation, demos) for example in tqdm(data)]
+    if do_inter_exter:
+        formatted_data = [format_prompt_inter_exter(dataset_name, example, n_docs, prompt_dict, tokenizer, do_internal_generation, do_rationale_generation, demos) for example in tqdm(data)]
+    elif do_vanilla:
+        formatted_data = [format_prompt_vanilla(dataset_name, example, n_docs, prompt_dict, tokenizer, demos) for example in tqdm(data)]
+    else:
+        formatted_data = [format_prompt(dataset_name, example, n_docs, prompt_dict, tokenizer, do_rationale_generation, demos) for example in tqdm(data)]
 
     return formatted_data

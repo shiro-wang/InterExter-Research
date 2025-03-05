@@ -34,6 +34,13 @@ class ModelArguments:
 
 @dataclass
 class DataArguments:
+    dataset_path: str = field(
+        default="../../../dataspace/P76124574/InstructRAG/",
+        metadata={
+            "help": "Path to the dataset."
+        },
+    )
+    
     dataset_name: str = field(
         default=None,
         metadata={
@@ -52,6 +59,13 @@ class DataArguments:
         default=5, 
         metadata={
             "help": "Number of documents retrieved for each example."
+        },
+    )
+    
+    internal: bool = field(
+        default=False,
+        metadata={
+            "help": "If True, internal knowledge is used."
         },
     )
 
