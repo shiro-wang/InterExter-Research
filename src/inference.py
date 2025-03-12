@@ -7,7 +7,7 @@ from metrics import get_metrics
 from vllm import LLM, SamplingParams
 
 def generate_rationale(args):
-    data_path = args.datapath + f'eval_results/{args.rag_model}/{args.dataset_name}/with_internal/demos_inter_exter.json' # f'dataset/{args.dataset_name}/train.json'
+    data_path = args.datapath + f'eval_results/{args.rag_model}/{args.dataset_name}/with_internal/{args.input_file}.json' # f'dataset/{args.dataset_name}/train.json'
     print(f"Loading training set from: {data_path}")
     train_data = common_utils.jload(data_path)[:args.max_instances]
 
@@ -34,14 +34,14 @@ def generate_rationale(args):
     outputs = llm.generate(prompts, sampling_params)
 
     if args.do_inter_exter:
-        output_file = os.path.join(args.output_dir, "with_rationale/demos_inter_exter.json")
+        output_file = os.path.join(args.output_dir, f"with_rationale/{args.output_file}_{args.version}.json")
     else:
         output_file = os.path.join(args.output_dir, "with_rationale/train.json")
 
     save_outputs(outputs, train_data, output_file, args.n_docs, with_internal=args.do_inter_exter)
 
 def generate_internal_knowledge(args):
-    data_path = args.datapath + f'dataset/{args.dataset_name}/train.json'
+    data_path = args.datapath + f'dataset/{args.dataset_name}/{args.input_file}.json'
     print(f"Loading dataset from: {data_path}")
     train_data = common_utils.jload(data_path)[:args.max_instances]
 
@@ -68,13 +68,13 @@ def generate_internal_knowledge(args):
     
     outputs = llm.generate(prompts, sampling_params)
 
-    output_file = os.path.join(args.output_dir, "with_internal/train_inter_exter.json")
+    output_file = os.path.join(args.output_dir, f"with_internal/{args.output_file}_{args.version}.json")
 
-    save_outputs(outputs, train_data, output_file, args.n_docs, save_internal=True)
+    save_outputs(outputs, train_data, output_file, args.n_docs, save_internal=True,)
    
 def eval_model(args):
     if args.do_inter_exter:
-        data_path = args.datapath + f'eval_results/{args.rag_model}/{args.dataset_name}/with_internal/test_inter_exter.json' # f'dataset/{args.dataset_name}/test.json' # f'eval_results/{args.rag_model}/{args.dataset_name}/with_internal/test_inter_exter.json'
+        data_path = args.datapath + f'eval_results/InstructRAG-ICL/{args.dataset_name}/with_internal/{args.input_file}.json' # f'dataset/{args.dataset_name}/test.json' # f'eval_results/{args.rag_model}/{args.dataset_name}/with_internal/test_inter_exter.json'
     else:
         data_path = args.datapath + f'dataset/{args.dataset_name}/test.json'
     print(f"Loading eval set from: {data_path}")
@@ -89,7 +89,7 @@ def eval_model(args):
             llm = LLM(model=f'meng-lab/{args.dataset_name}-InstructRAG-FT', download_dir=args.cache_dir, max_model_len=args.max_tokens)
     elif args.rag_model == 'InstructRAG-ICL':
         if not args.do_vanilla:
-            demos = common_utils.jload(args.datapath + f'eval_results/{args.rag_model}/{args.dataset_name}/with_rationale/demos_inter_exter.json') # f'dataset/{args.dataset_name}/demos.json' # f'eval_results/{args.rag_model}/{args.dataset_name}/with_rationale/demos_inter_exter.json')
+            demos = common_utils.jload(args.datapath + f'eval_results/{args.rag_model}/{args.dataset_name}/with_rationale/demos_inter_exter_v1.json') # f'dataset/{args.dataset_name}/demos.json' # f'eval_results/{args.rag_model}/{args.dataset_name}/with_rationale/demos_inter_exter.json')
         llm = LLM(model='meta-llama/Meta-Llama-3-8B-Instruct', download_dir=args.cache_dir, max_model_len=args.max_tokens)
 
     tokenizer = llm.get_tokenizer()
@@ -114,14 +114,14 @@ def eval_model(args):
     outputs = llm.generate(prompts, sampling_params)
     
     if args.do_inter_exter:
-        output_file = os.path.join(args.output_dir, "result_inter_exter.json")
+        output_file = os.path.join(args.output_dir, f"{args.output_file}_{args.version}.json")
     elif args.do_vanilla:
         output_file = os.path.join(args.output_dir, "result_vanilla.json")
     else:
         output_file = os.path.join(args.output_dir, "result_instrag.json")
 
     eval_results = save_outputs(outputs, test_data, output_file, args.n_docs)
-    get_metrics(eval_results, args.output_dir, is_asqa=args.dataset_name == 'ASQA', with_internal=args.do_inter_exter, vanilla=args.do_vanilla)
+    get_metrics(args, eval_results, args.output_dir, is_asqa=args.dataset_name == 'ASQA', with_internal=args.do_inter_exter, vanilla=args.do_vanilla)
 
 def save_outputs(outputs, test_data, output_file, n_docs, save_internal=False, with_internal=False):
     # Save the outputs as a JSON file.
@@ -160,6 +160,8 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument('--dataset_name', type=str, help='Name of the dataset')
     parser.add_argument('--datapath', type=str, help='Path to the dataset', default='')
+    parser.add_argument('--input_file', type=str, help='Path to the input file')
+    parser.add_argument('--output_file', type=str, help='Path to the output file')
     parser.add_argument('--rag_model', type=str, choices=['InstructRAG-FT', 'InstructRAG-ICL'], default='InstructRAG-FT', help='InstructRAG model: InstructRAG-FT or InstructRAG-ICL')
     parser.add_argument('--model_name_or_path', type=str, default='meta-llama/Meta-Llama-3-8B-Instruct', help='name of the model in Hugging Face model hub or path to the model')
     parser.add_argument('--load_local_model', action='store_true', help='Load local model')
@@ -175,6 +177,7 @@ if __name__ == "__main__":
     parser.add_argument('--do_internal_generation', action='store_true', help='Generate internal knowledge')
     parser.add_argument('--do_inter_exter', type=bool, default=False, help='Generate internal and external knowledge')
     parser.add_argument('--do_vanilla', type=bool, default=False, help='Generate vanilla outputs')
+    parser.add_argument('--version', type=str, default='', help='Version of the dataset')
 
     args = parser.parse_args()
     

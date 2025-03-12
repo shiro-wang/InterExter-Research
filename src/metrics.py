@@ -27,7 +27,6 @@ def exact_presence(answers, context):
 
     for ans in answers:
         if ans in context:
-            # print(f"Answer: {ans}, \n Context: {context}")
             return True
 
     return False
@@ -57,7 +56,7 @@ def compute_str_em(data):
     return 100 * np.mean(acc), 100 * np.mean(hit)
 
 
-def get_metrics(data, save_dir=None, is_asqa=False, with_internal=False, vanilla=False):
+def get_metrics(args, data, save_dir=None, is_asqa=False, with_internal=False, vanilla=False):
     idx = 0
     num_accurate = 0
     list_accurate = []
@@ -66,10 +65,10 @@ def get_metrics(data, save_dir=None, is_asqa=False, with_internal=False, vanilla
         rationale_str_em, _ = compute_str_em(data)
     else:
         for d in tqdm(data):
-            print(f"id: {idx}")
+            # print(f"id: {idx}")
             idx += 1
             is_accurate = exact_presence(d['answers'], d['rationale'])
-            # print(f"is_accurate: {is_accurate}")
+            
             if is_accurate:
                 num_accurate += 1
                 list_accurate.append(1)
@@ -85,7 +84,7 @@ def get_metrics(data, save_dir=None, is_asqa=False, with_internal=False, vanilla
         eval_result = {"accuracy": accuracy, "num_examples": idx, "acc_list": list_accurate}
         
     if with_internal:
-        with open(f"{save_dir}/metrics_inter_exter.json", "w") as f:
+        with open(f"{save_dir}/metrics_inter_exter_{args.version}.json", "w") as f:
             f.write(json.dumps(eval_result) + "\n")
     elif vanilla:
         with open(f"{save_dir}/metrics_vanilla.json", "w") as f:

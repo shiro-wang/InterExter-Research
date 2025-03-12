@@ -26,8 +26,8 @@ def confusion_matrix(cmp1, cmp2):
     print(f"{args.cmp2_name} correct, {args.cmp1_name} wrong: {len(cmp2_correct_cmp1_wrong)}")
     print(f"Total: {len(cmp1)}")
     
-    test_id = 99
-    print(f"For the test id {test_id}:{args.cmp1_name}: {cmp1[test_id]}, {args.cmp2_name}: {cmp2[test_id]}")
+    # test_id = 99
+    # print(f"For the test id {test_id}:{args.cmp1_name}: {cmp1[test_id]}, {args.cmp2_name}: {cmp2[test_id]}")
     
     if args.save:
         common_utils.jdump({"both_correct": len(both_correct), "both_wrong": len(both_wrong), f"{args.cmp1_name}_correct_{args.cmp2_name}_wrong": len(cmp1_correct_cmp2_wrong), f"{args.cmp2_name}_correct_{args.cmp1_name}_wrong": len(cmp2_correct_cmp1_wrong)}, \
@@ -81,7 +81,7 @@ def check_diff(args):
         common_utils.jdump(both_wrong_result, f"{args.datapath}eval_results/{args.rag_model}/{args.dataset_name}/exp_{args.experiment_date}/both_wrong.json")
         common_utils.jdump(cmp1_correct_cmp2_wrong_result, f"{args.datapath}eval_results/{args.rag_model}/{args.dataset_name}/exp_{args.experiment_date}/{args.cmp1_name}_correct_{args.cmp2_name}_wrong.json")
         common_utils.jdump(cmp2_correct_cmp1_wrong_result, f"{args.datapath}eval_results/{args.rag_model}/{args.dataset_name}/exp_{args.experiment_date}/{args.cmp2_name}_correct_{args.cmp1_name}_wrong.json")
-    
+        print(f"Saved data to the path {args.datapath}eval_results/{args.rag_model}/{args.dataset_name}/exp_{args.experiment_date}")
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
