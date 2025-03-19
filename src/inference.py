@@ -24,6 +24,7 @@ def generate_rationale(args):
         n_docs=args.n_docs,
         do_rationale_generation=True,
         do_inter_exter=args.do_inter_exter,
+        lost_in_mid=args.lost_in_mid,
     )
 
     sampling_params = SamplingParams(temperature=args.temperature, 
@@ -59,6 +60,7 @@ def generate_internal_knowledge(args):
         do_rationale_generation=False,
         do_internal_generation=True,
         do_inter_exter=True,
+        lost_in_mid=args.lost_in_mid,
     )
 
     sampling_params = SamplingParams(temperature=args.temperature, 
@@ -89,7 +91,10 @@ def eval_model(args):
             llm = LLM(model=f'meng-lab/{args.dataset_name}-InstructRAG-FT', download_dir=args.cache_dir, max_model_len=args.max_tokens)
     elif args.rag_model == 'InstructRAG-ICL':
         if not args.do_vanilla:
-            demos = common_utils.jload(args.datapath + f'eval_results/{args.rag_model}/{args.dataset_name}/with_rationale/demos_inter_exter_v1.json') # f'dataset/{args.dataset_name}/demos.json' # f'eval_results/{args.rag_model}/{args.dataset_name}/with_rationale/demos_inter_exter.json')
+            if args.do_inter_exter:
+                demos = common_utils.jload(args.datapath + f'eval_results/{args.rag_model}/{args.dataset_name}/with_internal/demos_inter_exter_v1.json')
+            else:
+                demos = common_utils.jload(args.datapath + f'dataset/{args.dataset_name}/demos.json') # f'dataset/{args.dataset_name}/demos.json' # f'eval_results/{args.rag_model}/{args.dataset_name}/with_rationale/demos_inter_exter.json')
         llm = LLM(model='meta-llama/Meta-Llama-3-8B-Instruct', download_dir=args.cache_dir, max_model_len=args.max_tokens)
 
     tokenizer = llm.get_tokenizer()
@@ -104,6 +109,7 @@ def eval_model(args):
         demos=demos,
         do_inter_exter=args.do_inter_exter,
         do_vanilla = args.do_vanilla,
+        lost_in_mid=args.lost_in_mid,
     )
     
     sampling_params = SamplingParams(temperature=args.temperature, 
@@ -167,6 +173,7 @@ if __name__ == "__main__":
     parser.add_argument('--load_local_model', action='store_true', help='Load local model')
     parser.add_argument('--do_rationale_generation', action='store_true', help='Generate rationales on training data')
     parser.add_argument('--n_docs', type=int, default=5, help='Number of retrieved documents')
+    parser.add_argument('--lost_in_mid', type=bool, default=False, help='Lost in the middle problem in RAG => reordering the documents')
     parser.add_argument('--output_dir', type=str, help='Path to the output file')
     parser.add_argument('--cache_dir', type=str, default='../../../dataspace/P76124574/InstructRAG/models/', help='Directory to cached models')
     parser.add_argument('--prompt_dict_path', type=str, default="src/rag.json")
@@ -182,8 +189,11 @@ if __name__ == "__main__":
     args = parser.parse_args()
     
     if args.do_rationale_generation:
+        print("Generating rationales...")
         generate_rationale(args)
     elif args.do_internal_generation:
+        print("Generating internal knowledge...")
         generate_internal_knowledge(args)
     else:
+        print("Evaluating model...")
         eval_model(args)

@@ -103,21 +103,67 @@ def normalize_question(question):
     return question[0].lower() + question[1:]
 
 
-def build_contexts(example, n_docs, internal=False):
+# def build_contexts(example, n_docs, internal=False):
 
+#     if len(example["ctxs"]) > 0 and example["ctxs"][0]["score"] > example["ctxs"][1]["score"]:
+#         ctxs_list = example["ctxs"][:n_docs][::-1]
+#     else:
+#         ctxs_list = example["ctxs"][:n_docs]
+
+#     docs_text = "\n\n".join([f"Document {idx+1} (Title: {ctx['title']}): {ctx['text']}" for idx, ctx in enumerate(ctxs_list)])
+    
+#     if internal:
+#         docs_text += f"\n\nDocument {len(ctxs_list)+1} (Internal Knowledge): {example['internal_knowledge']}"
+        
+#     doc_prompt = f"{docs_text}\n\n"
+    
+#     return doc_prompt
+
+def default_ordering(example, n_docs, internal):
     if len(example["ctxs"]) > 0 and example["ctxs"][0]["score"] > example["ctxs"][1]["score"]:
         ctxs_list = example["ctxs"][:n_docs][::-1]
     else:
         ctxs_list = example["ctxs"][:n_docs]
-
+    
+    # if internal:
+    #     ctxs_list.append({"title": "Internal Knowledge", "text": example["internal_knowledge"]})
+    
     docs_text = "\n\n".join([f"Document {idx+1} (Title: {ctx['title']}): {ctx['text']}" for idx, ctx in enumerate(ctxs_list)])
     
     if internal:
-        docs_text += f"\n\nDocument {len(ctxs_list)+1} (Internal Knowledge): {example['internal_knowledge']}"
-        
-    doc_prompt = f"{docs_text}\n\n"
+        docs_text += (f"\n\nInternal Knowledge (Background Information): {example['internal_knowledge']}")
     
-    return doc_prompt
+    return f"{docs_text}\n\n"
+
+def lost_in_mid_ordering(example, n_docs, internal):
+    if len(example["ctxs"]) > 0 and example["ctxs"][0]["score"] > example["ctxs"][1]["score"]:
+        ctxs_list = example["ctxs"][:n_docs][::-1]
+    else:
+        ctxs_list = example["ctxs"][:n_docs]
+    
+    if internal:
+        ctxs_list.append({"title": "Internal Knowledge", "text": example["internal_knowledge"]})
+        n_docs += 1
+    
+    reordered_list = [None] * n_docs
+    left, right = 0, n_docs - 1
+    for i in range(n_docs):
+        if i % 2 == 0:
+            reordered_list[i] = ctxs_list[left]
+            left += 1
+        else:
+            reordered_list[i] = ctxs_list[right]
+            right -= 1
+    
+    docs_text = "\n\n".join([f"Document {idx+1} (Title: {ctx['title']}): {ctx['text']}" for idx, ctx in enumerate(reordered_list)])
+    
+    return f"{docs_text}\n\n"
+
+def build_contexts(example, n_docs, internal=False, lost_in_mid=False):
+    if lost_in_mid:
+        return lost_in_mid_ordering(example, n_docs, internal)
+    else:
+        return default_ordering(example, n_docs, internal)
 
 
 def preprocess_for_rag(
@@ -127,6 +173,7 @@ def preprocess_for_rag(
     n_docs: int,
     internal: bool = False,
     verbose=True,
+    lost_in_mid=False,
 ) -> dict[str, Union[torch.Tensor, Sequence[torch.Tensor]]]:
     """Preprocess the data by tokenizing."""
 
@@ -142,7 +189,7 @@ def preprocess_for_rag(
 
     for sample in data_list:
         query_prompt = prompt_dict['query_prompt_inter_exter'].format(question=normalize_question(sample['question']))
-        doc_prompt = build_contexts(sample, n_docs=n_docs, internal=internal)
+        doc_prompt = build_contexts(sample, n_docs=n_docs, internal=internal, lost_in_mid=lost_in_mid)
         sources.append(doc_prompt + query_prompt)
     
         target_prompt = assistant_prefix + sample['rationale'] + tokenizer.eos_token
@@ -252,6 +299,7 @@ def format_prompt(
         tokenizer: transformers.PreTrainedTokenizer,
         do_rationale_generation: bool,
         demos: list = [],
+        lost_in_mid=False,
         ) -> str:
     """Formats a prompt with a prompt_dict formatter.
 
@@ -274,7 +322,7 @@ def format_prompt(
     query_prompt = prompt_dict['query_prompt'].format_map(example)
     target_prefix = ""
 
-    doc_prompt = build_contexts(example, n_docs=n_docs)
+    doc_prompt = build_contexts(example, n_docs=n_docs, lost_in_mid=lost_in_mid)
 
     prefix = prompt_dict['user_prefix']
 
@@ -316,6 +364,7 @@ def format_prompt_inter_exter(
         do_internal_generation: bool,
         do_rationale_generation: bool,
         demos: list = [],
+        lost_in_mid=False,
         ) -> str:
     """Formats a prompt with a prompt_dict formatter in inter_exter version.
 
@@ -338,7 +387,7 @@ def format_prompt_inter_exter(
     query_prompt = prompt_dict['query_prompt_inter_exter'].format_map(example)
     target_prefix = ""
 
-    doc_prompt = build_contexts(example, n_docs=n_docs, internal= not do_internal_generation)
+    doc_prompt = build_contexts(example, n_docs=n_docs, internal= not do_internal_generation, lost_in_mid=lost_in_mid)
 
     prefix = prompt_dict['user_prefix']
 
@@ -377,12 +426,13 @@ def format_prompt_inter_exter(
     return formatted_prompt
 
 def format_prompt_vanilla(
-    dataset_name: str,
+        dataset_name: str,
         example: dict, 
         n_docs: int,
         prompt_dict: dict,
         tokenizer: transformers.PreTrainedTokenizer,
         demos: list = [],
+        lost_in_mid=False,
         ) -> str:
     """Formats a prompt with a prompt_dict formatter.
     """
@@ -392,7 +442,7 @@ def format_prompt_vanilla(
     query_prompt = prompt_dict['query_prompt'].format_map(example)
     target_prefix = ""
 
-    doc_prompt = build_contexts(example, n_docs=n_docs)
+    doc_prompt = build_contexts(example, n_docs=n_docs, lost_in_mid=lost_in_mid)
 
     prefix = prompt_dict['user_prefix']
     
@@ -425,6 +475,7 @@ def format_prompt_with_data_list(
     tokenizer: transformers.PreTrainedTokenizer,
     n_docs: int = 5,
     demos: list = [],
+    lost_in_mid=False,
     do_rationale_generation: bool = False,
     do_internal_generation: bool = False,
     do_inter_exter: bool = False,
@@ -434,10 +485,10 @@ def format_prompt_with_data_list(
     data = copy.deepcopy(data_list)
     logger.warning(f"Formatting prompts...")
     if do_inter_exter:
-        formatted_data = [format_prompt_inter_exter(dataset_name, example, n_docs, prompt_dict, tokenizer, do_internal_generation, do_rationale_generation, demos) for example in tqdm(data)]
+        formatted_data = [format_prompt_inter_exter(dataset_name, example, n_docs, prompt_dict, tokenizer, do_internal_generation, do_rationale_generation, demos, lost_in_mid) for example in tqdm(data)]
     elif do_vanilla:
-        formatted_data = [format_prompt_vanilla(dataset_name, example, n_docs, prompt_dict, tokenizer, demos) for example in tqdm(data)]
+        formatted_data = [format_prompt_vanilla(dataset_name, example, n_docs, prompt_dict, tokenizer, demos, lost_in_mid) for example in tqdm(data)]
     else:
-        formatted_data = [format_prompt(dataset_name, example, n_docs, prompt_dict, tokenizer, do_rationale_generation, demos) for example in tqdm(data)]
+        formatted_data = [format_prompt(dataset_name, example, n_docs, prompt_dict, tokenizer, do_rationale_generation, demos, lost_in_mid) for example in tqdm(data)]
 
     return formatted_data
