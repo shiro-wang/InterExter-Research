@@ -92,7 +92,7 @@ def eval_model(args):
     elif args.rag_model == 'InstructRAG-ICL':
         if not args.do_vanilla:
             if args.do_inter_exter:
-                demos = common_utils.jload(args.datapath + f'eval_results/{args.rag_model}/{args.dataset_name}/with_internal/demos_inter_exter_v1.json')
+                demos = common_utils.jload(args.datapath + f'eval_results/{args.rag_model}/{args.dataset_name}/with_rationale/demos_inter_exter_{args.demo_version}.json')
             else:
                 demos = common_utils.jload(args.datapath + f'dataset/{args.dataset_name}/demos.json') # f'dataset/{args.dataset_name}/demos.json' # f'eval_results/{args.rag_model}/{args.dataset_name}/with_rationale/demos_inter_exter.json')
         llm = LLM(model='meta-llama/Meta-Llama-3-8B-Instruct', download_dir=args.cache_dir, max_model_len=args.max_tokens)
@@ -185,6 +185,7 @@ if __name__ == "__main__":
     parser.add_argument('--do_inter_exter', type=bool, default=False, help='Generate internal and external knowledge')
     parser.add_argument('--do_vanilla', type=bool, default=False, help='Generate vanilla outputs')
     parser.add_argument('--version', type=str, default='', help='Version of the dataset')
+    parser.add_argument('--demo_version', type=str, default='', help='Version of the demos')
 
     args = parser.parse_args()
     
