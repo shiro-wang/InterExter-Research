@@ -1,19 +1,23 @@
-DATASET=TriviaQA # [PopQA, TriviaQA, NaturalQuestions, 2WikiMultiHopQA, ASQA]
+DATASET=PopQA # [PopQA, TriviaQA, NaturalQuestions, 2WikiMultiHopQA, ASQA]
 MODEL=InstructRAG-ICL # [InstructRAG-FT, InstructRAG-ICL]
+LLM_MODEL=meta-llama/Meta-Llama-3-8B-Instruct
 DATAPATH=../../../dataspace/P76124574/InstructRAG/
 
-CUDA_VISIBLE_DEVICES=1 python src/inference.py \
+CUDA_VISIBLE_DEVICES=0 python src/inference.py \
   --dataset_name $DATASET \
   --rag_model $MODEL \
   --n_docs 5 \
   --output_dir ${DATAPATH}/eval_results/${MODEL}/${DATASET} \
   --datapath $DATAPATH \
-  --input_file test_inter_exter_v4 \
-  --output_file result_inter_exter \
+  --input_file train_inter_exter_v4 \
+  --output_file train_inter_exter \
+  --version v4_r6 \
+  --demo_version v4_r6\
   --do_inter_exter True \
-  --version v4_r3_d3 \
-  --demo_version v4_r3 \
-  # --do_rationale_generation \
+  --model_name_or_path $LLM_MODEL \
+  --do_rationale_generation_train \
+  --do_rationale_generation \
+  # --max_instances 100 \
   # --do_vanilla True \
   # --max_instances 100 \
   # --do_internal_generation \

@@ -3,6 +3,7 @@ import sys
 import argparse
 import data_utils
 import common_utils
+
 from metrics import get_metrics
 from vllm import LLM, SamplingParams
 
@@ -17,6 +18,7 @@ def generate_rationale(args):
     prompt_dict = common_utils.jload(args.prompt_dict_path)
 
     prompts = data_utils.format_prompt_with_data_list(
+        args=args,
         data_list=train_data,
         dataset_name=args.dataset_name,
         prompt_dict=prompt_dict,
@@ -52,6 +54,7 @@ def generate_internal_knowledge(args):
     prompt_dict = common_utils.jload(args.prompt_dict_path)
 
     prompts = data_utils.format_prompt_with_data_list(
+        args=args,
         data_list=train_data,
         dataset_name=args.dataset_name,
         prompt_dict=prompt_dict,
@@ -95,12 +98,13 @@ def eval_model(args):
                 demos = common_utils.jload(args.datapath + f'eval_results/{args.rag_model}/{args.dataset_name}/with_rationale/demos_inter_exter_{args.demo_version}.json')
             else:
                 demos = common_utils.jload(args.datapath + f'dataset/{args.dataset_name}/demos.json') # f'dataset/{args.dataset_name}/demos.json' # f'eval_results/{args.rag_model}/{args.dataset_name}/with_rationale/demos_inter_exter.json')
-        llm = LLM(model='meta-llama/Meta-Llama-3-8B-Instruct', download_dir=args.cache_dir, max_model_len=args.max_tokens)
+        llm = LLM(model=args.model_name_or_path, download_dir=args.cache_dir, max_model_len=args.max_tokens)
 
     tokenizer = llm.get_tokenizer()
     prompt_dict = common_utils.jload(args.prompt_dict_path)
  
     prompts = data_utils.format_prompt_with_data_list(
+        args=args,
         data_list=test_data,
         dataset_name=args.dataset_name,
         prompt_dict=prompt_dict,
@@ -171,7 +175,6 @@ if __name__ == "__main__":
     parser.add_argument('--rag_model', type=str, choices=['InstructRAG-FT', 'InstructRAG-ICL'], default='InstructRAG-FT', help='InstructRAG model: InstructRAG-FT or InstructRAG-ICL')
     parser.add_argument('--model_name_or_path', type=str, default='meta-llama/Meta-Llama-3-8B-Instruct', help='name of the model in Hugging Face model hub or path to the model')
     parser.add_argument('--load_local_model', action='store_true', help='Load local model')
-    parser.add_argument('--do_rationale_generation', action='store_true', help='Generate rationales on training data')
     parser.add_argument('--n_docs', type=int, default=5, help='Number of retrieved documents')
     parser.add_argument('--lost_in_mid', type=bool, default=False, help='Lost in the middle problem in RAG => reordering the documents')
     parser.add_argument('--output_dir', type=str, help='Path to the output file')
@@ -182,6 +185,8 @@ if __name__ == "__main__":
     parser.add_argument('--seed', type=int, default=42, help='Random seed')
     parser.add_argument('--max_instances', type=int, default=sys.maxsize)
     parser.add_argument('--do_internal_generation', action='store_true', help='Generate internal knowledge')
+    parser.add_argument('--do_rationale_generation', action='store_true', help='Generate rationales')
+    parser.add_argument('--do_rationale_generation_train', action='store_true', help='Generate rationales on training data')
     parser.add_argument('--do_inter_exter', type=bool, default=False, help='Generate internal and external knowledge')
     parser.add_argument('--do_vanilla', type=bool, default=False, help='Generate vanilla outputs')
     parser.add_argument('--version', type=str, default='', help='Version of the dataset')

@@ -24,6 +24,7 @@ import torch
 import numpy as np
 import transformers
 import log_utils, common_utils 
+import metrics
 
 IGNORE_INDEX = -100
 logger = log_utils.get_logger(__name__)
@@ -79,7 +80,7 @@ def make_supervised_data(
     
     prompt_dict = common_utils.jload(data_args.prompt_dict_path)
 
-    data_path = os.path.join(data_args.dataset_path, 'eval_results/InstructRAG-ICL', data_args.dataset_name, 'with_rationale/train_inter_exter.json')
+    data_path = os.path.join(data_args.dataset_path, 'eval_results/InstructRAG-ICL', data_args.dataset_name, 'with_rationale/train_inter_exter_v4_r6.json')
     logger.warning(f"Loading training set from: {data_path}")
     data_list = common_utils.jload(data_path)
 
@@ -125,13 +126,11 @@ def default_ordering(example, n_docs, internal):
     else:
         ctxs_list = example["ctxs"][:n_docs]
     
-    # if internal:
-    #     ctxs_list.append({"title": "Internal Knowledge", "text": example["internal_knowledge"]})
-    
     docs_text = "\n\n".join([f"Document {idx+1} (Title: {ctx['title']}): {ctx['text']}" for idx, ctx in enumerate(ctxs_list)])
-    
-    if internal:
-        docs_text += (f"\n\nInternal Knowledge (Background Information): {example['internal_knowledge']}")
+    docs_text += (f"\n\nInternal Knowledge (Background Information): {example['internal_knowledge']}")
+    # docs_text=""
+    # if internal:
+    #     docs_text += (f"\n\nInternal Knowledge (Background Information): {example['internal_knowledge']}")
     
     return f"{docs_text}\n\n"
 
@@ -188,7 +187,7 @@ def preprocess_for_rag(
     user_prefix_len = len(user_prefix_id)
 
     for sample in data_list:
-        query_prompt = prompt_dict['query_prompt_inter_exter'].format(question=normalize_question(sample['question']))
+        query_prompt = prompt_dict['query_prompt_inter_exter_r6'].format(question=normalize_question(sample['question']))
         doc_prompt = build_contexts(sample, n_docs=n_docs, internal=internal, lost_in_mid=lost_in_mid)
         sources.append(doc_prompt + query_prompt)
     
@@ -289,9 +288,84 @@ def _tokenize_fn(strings: Sequence[str], tokenizer: transformers.PreTrainedToken
         ),
     )
 
+def diff_rationale_gen(prompt_dict: dict, example: dict, dataset_name: str, inter_exter_gd_data: dict, id: int) -> str:
+    # target_prefix += prompt_dict['rationale_generation_instruction_inter_exter'].format_map(example) + prompt_dict['rationale_generation_postfix_' + dataset_name]
+    target_prefix = ""
+    if inter_exter_gd_data["inter_gd_list"][id] == 1:
+        if inter_exter_gd_data["exter_gd_list"][id] == 1:   # both contain answers
+            target_prefix += prompt_dict['rationale_generation_instruction_inter_exter_gd_prefix']
+        else:                                               # only internal contains answers
+            target_prefix += prompt_dict['rationale_generation_instruction_inter_gd_prefix']
+    else:
+        if inter_exter_gd_data["exter_gd_list"][id] == 1:   # only external contains answers
+            target_prefix += prompt_dict['rationale_generation_instruction_exter_gd_prefix']
+        else:                                               # both do not contain answers
+            target_prefix += prompt_dict['rationale_generation_instruction_no_gd_prefix']
+            
+    target_prefix = target_prefix.format_map(example) + prompt_dict['rationale_generation_postfix_' + dataset_name]        
+            
+    return target_prefix
+
+def inter_exter_exist_gd(args):
+    inter_exter_gd_path = args.datapath + f'eval_results/{args.rag_model}/{args.dataset_name}/with_rationale/train_inter_exter_{args.version}_gd.json'
+    # Get inter & exter whether including answers
+    if os.path.exists(inter_exter_gd_path):
+        inter_exter_gd_data = common_utils.jload(inter_exter_gd_path)   
+    else:
+        logger.warning(f"Building train_gd data...")
+        inter_exter_path = args.datapath + f'eval_results/{args.rag_model}/{args.dataset_name}//with_internal/{args.input_file}.json'
+        inter_exter_data = common_utils.jload(inter_exter_path)
+        inter_gd_list = []
+        exter_gd_list = []
+        
+        for data in inter_exter_data:
+            inter_gd = False
+            exter_gd = False
+            for ctx in data["ctxs"]:
+                if metrics.exact_presence(data["answers"], ctx["text"]):
+                    exter_gd = True
+                    break
+            
+            if metrics.exact_presence(data["answers"], data["internal_knowledge"]):
+                inter_gd = True
+            
+            if inter_gd:
+                inter_gd_list.append(1)
+            else:
+                inter_gd_list.append(0)
+            if exter_gd:
+                exter_gd_list.append(1)
+            else:
+                exter_gd_list.append(0)
+        inter_exter_gd_data = {"inter_gd_list": inter_gd_list, "exter_gd_list": exter_gd_list}
+            
+        both_correct_list = []
+        inter_correct_list = []
+        exter_correct_list = []
+        both_wrong_list = []
+        for idx, (inter_gd_result, exter_gd_result) in enumerate(zip(inter_exter_gd_data["inter_gd_list"], inter_exter_gd_data["exter_gd_list"])):
+            if inter_gd_result == 1 and exter_gd_result == 1:
+                both_correct_list.append(idx)
+            elif inter_gd_result == 1 and exter_gd_result == 0:
+                inter_correct_list.append(idx)
+            elif inter_gd_result == 0 and exter_gd_result == 1:
+                exter_correct_list.append(idx)
+            else:
+                both_wrong_list.append(idx)
+        
+        inter_exter_gd_data["condition_list"] = {"both_correct": both_correct_list, "inter_correct": inter_correct_list, "exter_correct": exter_correct_list, \
+            "both_wrong": both_wrong_list}
+        inter_exter_gd_data["condition_num"] = {"both_correct": len(both_correct_list), "inter_correct": len(inter_correct_list), "exter_correct": len(exter_correct_list), \
+            "both_wrong": len(both_wrong_list)}  
+        
+        common_utils.jdump(inter_exter_gd_data, inter_exter_gd_path)
+        
+    return inter_exter_gd_data
+
 # Inference Data Utils
 
 def format_prompt(
+        args,
         dataset_name: str,
         example: dict, 
         n_docs: int,
@@ -332,7 +406,7 @@ def format_prompt(
         target_prefix += prompt_dict['rationale_generation_instruction'].format_map(example) + prompt_dict['rationale_generation_postfix_' + dataset_name]
 
     elif len(demos) > 0:
-        prefix += prompt_dict['demo_task_instruction']
+        prefix += prompt_dict['demo_task_instruction'].format_map(example)
 
         for idx, demo in enumerate(demos):
             demo_question = normalize_question(demo['question'])
@@ -356,6 +430,7 @@ def format_prompt(
     return formatted_prompt
 
 def format_prompt_inter_exter(
+        args,
         dataset_name: str,
         example: dict, 
         n_docs: int,
@@ -365,6 +440,8 @@ def format_prompt_inter_exter(
         do_rationale_generation: bool,
         demos: list = [],
         lost_in_mid=False,
+        inter_exter_gd_data: dict = {},
+        id: int = 0,
         ) -> str:
     """Formats a prompt with a prompt_dict formatter in inter_exter version.
 
@@ -372,6 +449,7 @@ def format_prompt_inter_exter(
         example: A dict-like object with required keys "instruction" and "input"
         prompt_dict: Dictionary containing the keys "prompt_noinputs" and "prompt_inputs" which have
             placeholders corresponding to the keys from `example`. E.g. "{instruction}".
+        inter_exter_gd_data: A dict-like object with required keys "inter_gd_list" and "exter_gd_list"
 
     Returns:
         A formatted prompt string with inter_exter docs.
@@ -384,7 +462,7 @@ def format_prompt_inter_exter(
     example['question'] = normalize_question(example['question'])
     max_length = tokenizer.model_max_length
 
-    query_prompt = prompt_dict['query_prompt_inter_exter'].format_map(example)
+    query_prompt = prompt_dict['query_prompt_inter_exter_r6'].format_map(example)
     target_prefix = ""
 
     doc_prompt = build_contexts(example, n_docs=n_docs, internal= not do_internal_generation, lost_in_mid=lost_in_mid)
@@ -397,7 +475,10 @@ def format_prompt_inter_exter(
     
     elif do_rationale_generation:
         query_prompt = ''
-        target_prefix += prompt_dict['rationale_generation_instruction_inter_exter'].format_map(example) + prompt_dict['rationale_generation_postfix_' + dataset_name]
+        if args.do_rationale_generation_train:
+            target_prefix = diff_rationale_gen(prompt_dict, example, dataset_name, inter_exter_gd_data, id)
+        else:
+            target_prefix += prompt_dict['rationale_generation_instruction_inter_exter'].format_map(example) + prompt_dict['rationale_generation_postfix_' + dataset_name]
 
     elif len(demos) > 0:
         prefix += prompt_dict['demo_task_instruction']
@@ -426,6 +507,7 @@ def format_prompt_inter_exter(
     return formatted_prompt
 
 def format_prompt_vanilla(
+        args,
         dataset_name: str,
         example: dict, 
         n_docs: int,
@@ -469,6 +551,7 @@ def format_prompt_vanilla(
     return formatted_prompt
 
 def format_prompt_with_data_list(
+    args,
     data_list: list[dict],
     dataset_name: str,
     prompt_dict: dict,
@@ -485,10 +568,14 @@ def format_prompt_with_data_list(
     data = copy.deepcopy(data_list)
     logger.warning(f"Formatting prompts...")
     if do_inter_exter:
-        formatted_data = [format_prompt_inter_exter(dataset_name, example, n_docs, prompt_dict, tokenizer, do_internal_generation, do_rationale_generation, demos, lost_in_mid) for example in tqdm(data)]
+        inter_exter_gd_data = {}
+        if args.do_rationale_generation_train:
+            logger.warning(f"Loading train_gd data...")
+            inter_exter_gd_data = inter_exter_exist_gd(args)
+        formatted_data = [format_prompt_inter_exter(args, dataset_name, example, n_docs, prompt_dict, tokenizer, do_internal_generation, do_rationale_generation, demos, lost_in_mid, inter_exter_gd_data, id) for id, example in enumerate(tqdm(data))]
     elif do_vanilla:
-        formatted_data = [format_prompt_vanilla(dataset_name, example, n_docs, prompt_dict, tokenizer, demos, lost_in_mid) for example in tqdm(data)]
+        formatted_data = [format_prompt_vanilla(args, dataset_name, example, n_docs, prompt_dict, tokenizer, demos, lost_in_mid) for example in tqdm(data)]
     else:
-        formatted_data = [format_prompt(dataset_name, example, n_docs, prompt_dict, tokenizer, do_rationale_generation, demos, lost_in_mid) for example in tqdm(data)]
+        formatted_data = [format_prompt(args, dataset_name, example, n_docs, prompt_dict, tokenizer, do_rationale_generation, demos, lost_in_mid) for example in tqdm(data)]
 
     return formatted_data

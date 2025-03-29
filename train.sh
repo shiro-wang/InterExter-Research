@@ -1,14 +1,14 @@
 DATASET=PopQA
 PER_DEVICE_BATCH_SIZE=1
 NUM_DEVICE=2
-TOTAL_BATCH_SIZE=128
+TOTAL_BATCH_SIZE=2
 GRADIENT_ACC_STEPS=$(($TOTAL_BATCH_SIZE/$NUM_DEVICE/$PER_DEVICE_BATCH_SIZE))
 DATAPATH=../../../dataspace/P76124574/InstructRAG/
 
 CUDA_VISIBLE_DEVICES="0,1" torchrun --nproc_per_node=$NUM_DEVICE src/finetune.py \
   --model_name_or_path meta-llama/Meta-Llama-3-8B-Instruct \
   --dataset_name $DATASET \
-  --output_dir ${DATAPATH}/saved_checkpoints/InstructRAG-FT/${DATASET} \
+  --output_dir ${DATAPATH}/saved_checkpoints/InstructRAG-FT/${DATASET}_bf16_4096 \
   --per_device_train_batch_size $PER_DEVICE_BATCH_SIZE \
   --gradient_accumulation_steps $GRADIENT_ACC_STEPS \
   --num_train_epochs 2 \

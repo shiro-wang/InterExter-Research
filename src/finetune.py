@@ -120,6 +120,7 @@ def main():
             cache_dir=training_args.cache_dir,
             low_cpu_mem_usage=True,
             device_map={"": training_args.device.index},
+            torch_dtype=torch.bfloat16,
         )
 
         model = AutoModelForCausalLM.from_pretrained(model_args.model_name_or_path, **model_kwargs)

@@ -31,7 +31,7 @@ def confusion_matrix(cmp1, cmp2):
     
     if args.save:
         common_utils.jdump({"both_correct": len(both_correct), "both_wrong": len(both_wrong), f"{args.cmp1_name}_correct_{args.cmp2_name}_wrong": len(cmp1_correct_cmp2_wrong), f"{args.cmp2_name}_correct_{args.cmp1_name}_wrong": len(cmp2_correct_cmp1_wrong)}, \
-            f"{args.datapath}eval_results/{args.rag_model}/{args.dataset_name}/exp_{args.experiment_date}/confusion_matrix.json")
+            f"{args.datapath}experiments/{args.rag_model}/{args.dataset_name}/exp_{args.experiment_date}/confusion_matrix.json")
     return both_correct, both_wrong, cmp1_correct_cmp2_wrong, cmp2_correct_cmp1_wrong
     
 
@@ -77,11 +77,11 @@ def check_diff(args):
         f"{args.cmp1_name}": cmp1_result[cmp2_correct_cmp1_wrong[i]]["rationale"], f"{args.cmp1_name}_prompt": cmp1_result[cmp2_correct_cmp1_wrong[i]]["prompt"], \
             f"{args.cmp2_name}": cmp2_result[cmp2_correct_cmp1_wrong[i]]["rationale"],  f"{args.cmp2_name}_prompt": cmp2_result[cmp2_correct_cmp1_wrong[i]]["prompt"]} for i in range(len(cmp2_correct_cmp1_wrong))]
     if args.save:
-        common_utils.jdump(both_correct_result, f"{args.datapath}eval_results/{args.rag_model}/{args.dataset_name}/exp_{args.experiment_date}/both_correct.json")
-        common_utils.jdump(both_wrong_result, f"{args.datapath}eval_results/{args.rag_model}/{args.dataset_name}/exp_{args.experiment_date}/both_wrong.json")
-        common_utils.jdump(cmp1_correct_cmp2_wrong_result, f"{args.datapath}eval_results/{args.rag_model}/{args.dataset_name}/exp_{args.experiment_date}/{args.cmp1_name}_correct_{args.cmp2_name}_wrong.json")
-        common_utils.jdump(cmp2_correct_cmp1_wrong_result, f"{args.datapath}eval_results/{args.rag_model}/{args.dataset_name}/exp_{args.experiment_date}/{args.cmp2_name}_correct_{args.cmp1_name}_wrong.json")
-        print(f"Saved data to the path {args.datapath}eval_results/{args.rag_model}/{args.dataset_name}/exp_{args.experiment_date}")
+        common_utils.jdump(both_correct_result, f"{args.datapath}experiments/{args.rag_model}/{args.dataset_name}/exp_{args.experiment_date}/both_correct.json")
+        common_utils.jdump(both_wrong_result, f"{args.datapath}experiments/{args.rag_model}/{args.dataset_name}/exp_{args.experiment_date}/both_wrong.json")
+        common_utils.jdump(cmp1_correct_cmp2_wrong_result, f"{args.datapath}experiments/{args.rag_model}/{args.dataset_name}/exp_{args.experiment_date}/{args.cmp1_name}_correct_{args.cmp2_name}_wrong.json")
+        common_utils.jdump(cmp2_correct_cmp1_wrong_result, f"{args.datapath}experiments/{args.rag_model}/{args.dataset_name}/exp_{args.experiment_date}/{args.cmp2_name}_correct_{args.cmp1_name}_wrong.json")
+        print(f"Saved data to the path {args.datapath}experiments/{args.rag_model}/{args.dataset_name}/exp_{args.experiment_date}")
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
