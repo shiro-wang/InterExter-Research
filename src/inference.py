@@ -6,6 +6,8 @@ import common_utils
 
 from metrics import get_metrics
 from vllm import LLM, SamplingParams
+from huggingface_hub import snapshot_download
+from vllm.lora.request import LoRARequest
 
 def generate_rationale(args):
     data_path = args.datapath + f'eval_results/{args.rag_model}/{args.dataset_name}/with_internal/{args.input_file}.json' # f'dataset/{args.dataset_name}/train.json'
@@ -89,7 +91,11 @@ def eval_model(args):
     demos = []
     if args.rag_model == 'InstructRAG-FT':
         if args.load_local_model:
-            llm = LLM(model=args.datapath + f'saved_checkpoints/InstructRAG-FT/{args.dataset_name}',  max_model_len=args.max_tokens)
+            if args.lora:
+                lora_path = args.datapath + f'saved_checkpoints/InstructRAG-FT/{args.dataset_name}_{args.ft_model_id}'
+                llm = LLM(model=args.model_name_or_path, download_dir=args.cache_dir, max_model_len=args.max_tokens, enable_lora=True)
+            else:
+                llm = LLM(model=args.datapath + f'saved_checkpoints/InstructRAG-FT/{args.dataset_name}_{args.ft_model_id}',  max_model_len=args.max_tokens)
         else:
             llm = LLM(model=f'meng-lab/{args.dataset_name}-InstructRAG-FT', download_dir=args.cache_dir, max_model_len=args.max_tokens)
     elif args.rag_model == 'InstructRAG-ICL':
@@ -120,7 +126,8 @@ def eval_model(args):
                                     max_tokens=args.max_tokens, 
                                     seed=args.seed,
                                     stop_token_ids=[tokenizer.eos_token_id, tokenizer.convert_tokens_to_ids("<|eot_id|>")])
-    
+    if args.lora:
+        outputs = llm.generate(prompts, sampling_params, lora_request=LoRARequest("popqa_adapter", 1, lora_path))
     outputs = llm.generate(prompts, sampling_params)
     
     if args.do_inter_exter:
@@ -175,6 +182,8 @@ if __name__ == "__main__":
     parser.add_argument('--rag_model', type=str, choices=['InstructRAG-FT', 'InstructRAG-ICL'], default='InstructRAG-FT', help='InstructRAG model: InstructRAG-FT or InstructRAG-ICL')
     parser.add_argument('--model_name_or_path', type=str, default='meta-llama/Meta-Llama-3-8B-Instruct', help='name of the model in Hugging Face model hub or path to the model')
     parser.add_argument('--load_local_model', action='store_true', help='Load local model')
+    parser.add_argument('--lora', action='store_true', help='Load LoRA adapter, base model is the same as model_name_or_path, lora_path is same as ft_model_id')
+    parser.add_argument('--ft_model_id', type=str, default='z2_b256_e2_4096', help='Fine-tuned model ID')
     parser.add_argument('--n_docs', type=int, default=5, help='Number of retrieved documents')
     parser.add_argument('--lost_in_mid', type=bool, default=False, help='Lost in the middle problem in RAG => reordering the documents')
     parser.add_argument('--output_dir', type=str, help='Path to the output file')
@@ -186,7 +195,7 @@ if __name__ == "__main__":
     parser.add_argument('--max_instances', type=int, default=sys.maxsize)
     parser.add_argument('--do_internal_generation', action='store_true', help='Generate internal knowledge')
     parser.add_argument('--do_rationale_generation', action='store_true', help='Generate rationales')
-    parser.add_argument('--do_rationale_generation_train', action='store_true', help='Generate rationales on training data')
+    parser.add_argument('--do_rationale_generation_predefined', action='store_true', help='Generate rationales on predefined data')
     parser.add_argument('--do_inter_exter', type=bool, default=False, help='Generate internal and external knowledge')
     parser.add_argument('--do_vanilla', type=bool, default=False, help='Generate vanilla outputs')
     parser.add_argument('--version', type=str, default='', help='Version of the dataset')

@@ -80,7 +80,7 @@ def make_supervised_data(
     
     prompt_dict = common_utils.jload(data_args.prompt_dict_path)
 
-    data_path = os.path.join(data_args.dataset_path, 'eval_results/InstructRAG-ICL', data_args.dataset_name, 'with_rationale/train_inter_exter_v4_r6.json')
+    data_path = os.path.join(data_args.dataset_path, 'eval_results/InstructRAG-ICL', data_args.dataset_name, 'with_rationale', data_args.train_file_name + '.json')
     logger.warning(f"Loading training set from: {data_path}")
     data_list = common_utils.jload(data_path)
 
@@ -307,13 +307,13 @@ def diff_rationale_gen(prompt_dict: dict, example: dict, dataset_name: str, inte
     return target_prefix
 
 def inter_exter_exist_gd(args):
-    inter_exter_gd_path = args.datapath + f'eval_results/{args.rag_model}/{args.dataset_name}/with_rationale/train_inter_exter_{args.version}_gd.json'
+    inter_exter_gd_path = args.datapath + f'eval_results/{args.rag_model}/{args.dataset_name}/with_rationale/{args.input_file}_gd.json'
     # Get inter & exter whether including answers
     if os.path.exists(inter_exter_gd_path):
         inter_exter_gd_data = common_utils.jload(inter_exter_gd_path)   
     else:
-        logger.warning(f"Building train_gd data...")
-        inter_exter_path = args.datapath + f'eval_results/{args.rag_model}/{args.dataset_name}//with_internal/{args.input_file}.json'
+        logger.warning(f"Building {args.input_file}_gd data...")
+        inter_exter_path = args.datapath + f'eval_results/{args.rag_model}/{args.dataset_name}/with_internal/{args.input_file}.json'
         inter_exter_data = common_utils.jload(inter_exter_path)
         inter_gd_list = []
         exter_gd_list = []
@@ -475,7 +475,7 @@ def format_prompt_inter_exter(
     
     elif do_rationale_generation:
         query_prompt = ''
-        if args.do_rationale_generation_train:
+        if args.do_rationale_generation_predefined:
             target_prefix = diff_rationale_gen(prompt_dict, example, dataset_name, inter_exter_gd_data, id)
         else:
             target_prefix += prompt_dict['rationale_generation_instruction_inter_exter'].format_map(example) + prompt_dict['rationale_generation_postfix_' + dataset_name]
@@ -569,7 +569,7 @@ def format_prompt_with_data_list(
     logger.warning(f"Formatting prompts...")
     if do_inter_exter:
         inter_exter_gd_data = {}
-        if args.do_rationale_generation_train:
+        if args.do_rationale_generation_predefined:
             logger.warning(f"Loading train_gd data...")
             inter_exter_gd_data = inter_exter_exist_gd(args)
         formatted_data = [format_prompt_inter_exter(args, dataset_name, example, n_docs, prompt_dict, tokenizer, do_internal_generation, do_rationale_generation, demos, lost_in_mid, inter_exter_gd_data, id) for id, example in enumerate(tqdm(data))]

@@ -20,8 +20,13 @@ import transformers
 from transformers import Trainer, AutoModelForCausalLM
 
 import log_utils, common_utils, data_utils
+import os
+
+from peft import LoraConfig, TaskType, get_peft_model
 
 logger = log_utils.get_logger(__name__)
+# os.environ["WANDB_PROJECT"] = "inter_exter_ft"  # name your W&B project
+os.environ["WANDB_LOG_MODEL"] = "checkpoint_r6"  # log all model checkpoints
 
 
 @dataclass
@@ -45,6 +50,13 @@ class DataArguments:
         default=None,
         metadata={
             "help": "Name of the dataset to load."
+        },
+    )
+    
+    train_file_name: str = field(
+        default="train_inter_exter_v4_r6",
+        metadata={
+            "help": "Name of the input file that has predefined rationale."
         },
     )
 
@@ -104,8 +116,21 @@ class TrainingArguments(transformers.TrainingArguments):
             "Use fast tokenizer only if you can live with that."
         },
     )
+    # gradient_checkpointing: bool = field(
+    #     default=True,
+    #     metadata={
+    #         "help": "If True, gradient checkpointing is used."
+    #     },
+    # )
+    # deepspeed: str = field(
+    #     default="../configs/deepspeed_config.json",
+    #     metadata={
+    #         "help": "Path to the deepspeed config file."
+    #     },
+    # )
 
 def main():
+    using_lora = True
     parser = transformers.HfArgumentParser((ModelArguments, DataArguments, TrainingArguments))
     model_args, data_args, training_args = parser.parse_args_into_dataclasses()
 
@@ -143,6 +168,28 @@ def main():
         tokenizer=tokenizer,
         data_args=data_args,
     )
+    
+    if using_lora:
+        lora_config = LoraConfig(
+        task_type=TaskType.CAUSAL_LM, # type of task to train on
+        inference_mode=False, # set to False for training
+        r=16, # dimension of the smaller matrices
+        lora_alpha=32, # scaling factor
+        lora_dropout=0.1, # dropout of LoRA layers
+        target_modules="all-linear", # target modules to apply LoRA to
+        bias="none", # bias to add to the LoRA layers
+        )
+        
+        # model.enable_input_requires_grad()
+        model = get_peft_model(model, lora_config)
+        # model = model.train()
+        model.print_trainable_parameters()
+        if hasattr(model, "enable_input_require_grads"):
+            model.enable_input_require_grads()
+        else:
+            def make_inputs_require_grad(module, input, output):
+                output.requires_grad_(True)
+            model.get_input_embeddings().register_forward_hook(make_inputs_require_grad)
 
     trainer = Trainer(
         model=model,

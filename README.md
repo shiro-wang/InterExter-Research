@@ -42,7 +42,27 @@ Use the following script to evaluate InstructRAG in both training-free and train
 conda activate instrag
 bash eval.sh
 ```
-
+## Deepspeed 
+- Mismatch between deepspeed and hf
+    - ds train_micro_batch_size_per_gpu=1 vs hf per_device_train_batch_size=8
+    - ds train_batch_size=256 vs hf train_batch_size (calculated)=16
+    - ds optimizer.params.lr=2.5e-5 vs hf learning_rate=5e-05
+    - ds optimizer.params.weight_decay=0.0 vs hf weight_decay=0.0
+    - ds scheduler.params.warmup_max_lr=2.5e-05 vs hf learning_rate=5e-05
+    - ds bf16.enabled=True vs hf bf16|bf16_full_eval=False
+- cuda version
+    - File "/dataspace/P76124574/miniconda3/envs/instrag/lib/python3.10/site-packages/deepspeed/ops/op_builder/builder.py", line 110, in assert_no_cuda_mismatch
+    raise CUDAMismatchException(deepspeed.ops.op_builder.builder.CUDAMismatchException: >- DeepSpeed Op Builder: Installed CUDA version 11.7 does not match the version torch was compiled with 12.1, unable to compile cuda/cpp extensions without a matching cuda version.
+    - You can disable this error by removing/commenting the Exception
+    - Or add export DS_SKIP_CUDA_CHECK=1
+- lr scheduler don't have cosine
+    - cosine -> WarmupCosineLR
+    - warmup_min_lr -> X
+    - ds scheduler.params.warmup_num_steps=400 vs hf warmup_steps=3
+    - TypeError: deepspeed.runtime.lr_schedules.WarmupCosineLR() argument after ** must be a mapping, not NoneType
+    - ds scheduler.params.total_num_steps=256 vs hf num_training_steps (calculated)=100
+### Notice
+1. When using Zero2 with Hugging Face (HF), apart from settings related to zero_optimization, all other configurations—such as optimizer, scheduler, and data types (fp16, bf16, etc.)—should, as much as possible, not be set in the DeepSpeed config file. Instead, they should be specified in the execution command, following the behavior of the HF Trainer, using arguments like lr_scheduler_type, learning_rate, bf16 True, and so on.
 
 ## Generation Example
 

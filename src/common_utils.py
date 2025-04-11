@@ -247,6 +247,16 @@ def safe_save_model_for_hf_trainer(
             trainer._save(output_dir, state_dict=cpu_state_dict)  # noqa
 
     if trainer.args.should_save:
+        from peft import PeftModel  # 安全起見放在這裡 import
+
+        model = trainer.model
+        if isinstance(model, PeftModel):
+            try:
+                model.save_pretrained(output_dir)  # 儲存 adapter_model.bin & adapter_config.json
+                logger.info(f"Saved LoRA adapter to {output_dir}")
+            except Exception as e:
+                logger.warning(f"Failed to save LoRA adapter: {e}")
+                
         if give_rw_access:
             try:
                 os.system(f"chmod -R a+xwr {output_dir}")
