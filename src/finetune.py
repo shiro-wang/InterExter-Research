@@ -173,10 +173,10 @@ def main():
         lora_config = LoraConfig(
         task_type=TaskType.CAUSAL_LM, # type of task to train on
         inference_mode=False, # set to False for training
-        r=16, # dimension of the smaller matrices
-        lora_alpha=32, # scaling factor
-        lora_dropout=0.1, # dropout of LoRA layers
-        target_modules="all-linear", # target modules to apply LoRA to
+        r=8, # dimension of the smaller matrices
+        lora_alpha=16, # scaling factor
+        lora_dropout=0.05, # dropout of LoRA layers
+        target_modules=["q_proj", "v_proj"], # target modules to apply LoRA to
         bias="none", # bias to add to the LoRA layers
         )
         

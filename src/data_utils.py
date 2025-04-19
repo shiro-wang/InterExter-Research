@@ -187,7 +187,7 @@ def preprocess_for_rag(
     user_prefix_len = len(user_prefix_id)
 
     for sample in data_list:
-        query_prompt = prompt_dict['query_prompt_inter_exter_r6'].format(question=normalize_question(sample['question']))
+        query_prompt = prompt_dict['query_prompt_inter_exter_sp'].format(question=normalize_question(sample['question']))
         doc_prompt = build_contexts(sample, n_docs=n_docs, internal=internal, lost_in_mid=lost_in_mid)
         sources.append(doc_prompt + query_prompt)
     
@@ -288,22 +288,28 @@ def _tokenize_fn(strings: Sequence[str], tokenizer: transformers.PreTrainedToken
         ),
     )
 
-def diff_rationale_gen(prompt_dict: dict, example: dict, dataset_name: str, inter_exter_gd_data: dict, id: int) -> str:
+def diff_rationale_gen(args ,prompt_dict: dict, example: dict, dataset_name: str, inter_exter_gd_data: dict, id: int) -> str:
     # target_prefix += prompt_dict['rationale_generation_instruction_inter_exter'].format_map(example) + prompt_dict['rationale_generation_postfix_' + dataset_name]
     target_prefix = ""
-    if inter_exter_gd_data["inter_gd_list"][id] == 1:
-        if inter_exter_gd_data["exter_gd_list"][id] == 1:   # both contain answers
-            target_prefix += prompt_dict['rationale_generation_instruction_inter_exter_gd_prefix']
-        else:                                               # only internal contains answers
-            target_prefix += prompt_dict['rationale_generation_instruction_inter_gd_prefix']
-    else:
-        if inter_exter_gd_data["exter_gd_list"][id] == 1:   # only external contains answers
-            target_prefix += prompt_dict['rationale_generation_instruction_exter_gd_prefix']
-        else:                                               # both do not contain answers
-            target_prefix += prompt_dict['rationale_generation_instruction_no_gd_prefix']
+    inter = inter_exter_gd_data["inter_gd_list"][id]
+    exter = inter_exter_gd_data["exter_gd_list"][id]
+
+    prefix_key_map = {
+        (1, 1): 'rationale_generation_instruction_inter_exter_gd_prefix',
+        (1, 0): 'rationale_generation_instruction_inter_gd_prefix',
+        (0, 1): 'rationale_generation_instruction_exter_gd_prefix',
+        (0, 0): 'rationale_generation_instruction_no_gd_prefix',
+    }
+
+    target_prefix += prompt_dict[prefix_key_map[(inter, exter)]]
             
-    target_prefix = target_prefix.format_map(example) + prompt_dict['rationale_generation_postfix_' + dataset_name]        
-            
+    target_prefix = target_prefix.format_map(example) + prompt_dict['rationale_generation_postfix_' + dataset_name]
+    if args.do_rationale_generation_icl:
+        example_dict = common_utils.jload(args.datapath + f'eval_results/{args.rag_model}/{args.dataset_name}/with_rationale/{args.input_file}_{args.demo_version}_icl.json')
+        target_prefix += "\n\nBelow is an example of how to give the rationale:\n\n###\n\nExample:\n\n" + \
+            example_dict[prefix_key_map[(inter, exter)]] + \
+                "\n\n###Now, it is your turn to analyze the following external documents and internal knowledge to determine how they contribute to answering the question: {question}, and explain how they support the given answer: {answers}.\n\n".format_map(example)
+    
     return target_prefix
 
 def inter_exter_exist_gd(args):
@@ -462,7 +468,7 @@ def format_prompt_inter_exter(
     example['question'] = normalize_question(example['question'])
     max_length = tokenizer.model_max_length
 
-    query_prompt = prompt_dict['query_prompt_inter_exter_r6'].format_map(example)
+    query_prompt = prompt_dict['query_prompt_inter_exter_sp'].format_map(example)
     target_prefix = ""
 
     doc_prompt = build_contexts(example, n_docs=n_docs, internal= not do_internal_generation, lost_in_mid=lost_in_mid)
@@ -476,7 +482,7 @@ def format_prompt_inter_exter(
     elif do_rationale_generation:
         query_prompt = ''
         if args.do_rationale_generation_predefined:
-            target_prefix = diff_rationale_gen(prompt_dict, example, dataset_name, inter_exter_gd_data, id)
+            target_prefix = diff_rationale_gen(args, prompt_dict, example, dataset_name, inter_exter_gd_data, id)
         else:
             target_prefix += prompt_dict['rationale_generation_instruction_inter_exter'].format_map(example) + prompt_dict['rationale_generation_postfix_' + dataset_name]
 
@@ -493,10 +499,12 @@ def format_prompt_inter_exter(
     prefix_tokenized_id = tokenizer(prefix, return_tensors="pt", add_special_tokens=True).input_ids
     prefix_len = len(prefix_tokenized_id)
 
-    target_prefix += prompt_dict['assistant_prefix']
-    if do_internal_generation:
-        input_ids = tokenizer(query_prompt + target_prefix, return_tensors="pt", add_special_tokens=False).input_ids
+    
+    if args.do_rationale_generation_icl:
+        doc_prompt += prompt_dict['assistant_prefix']
+        input_ids = tokenizer(target_prefix + doc_prompt, return_tensors="pt", add_special_tokens=False).input_ids
     else:
+        target_prefix += prompt_dict['assistant_prefix']
         input_ids = tokenizer(doc_prompt + query_prompt + target_prefix, return_tensors="pt", add_special_tokens=False).input_ids
 
     if input_ids.shape[-1] > max_length - prefix_len:

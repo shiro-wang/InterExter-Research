@@ -83,9 +83,35 @@ def check_diff(args):
         common_utils.jdump(cmp2_correct_cmp1_wrong_result, f"{args.datapath}experiments/{args.rag_model}/{args.dataset_name}/exp_{args.experiment_date}/{args.cmp2_name}_correct_{args.cmp1_name}_wrong.json")
         print(f"Saved data to the path {args.datapath}experiments/{args.rag_model}/{args.dataset_name}/exp_{args.experiment_date}")
 
+def check_train(args):
+    rationale_data_path = args.datapath + f'eval_results/{args.rag_model}/{args.dataset_name}/with_rationale/{args.cmp1_name}_{args.check_version}.json'
+    gd_data_path = args.datapath + f'eval_results/{args.rag_model}/{args.dataset_name}/with_rationale/{args.cmp1_name}_gd.json'
+    print(f"Loading dataset from: {args.cmp1_name}_r6.json & {args.cmp1_name}_gd.json")
+    cmp1_rationale = common_utils.jload(rationale_data_path)
+    cmp1_gd = common_utils.jload(gd_data_path)
+    both_correct_data = []
+    both_wrong_data = []
+    inter_correct_data = []
+    exter_correct_data = []
+    for id in cmp1_gd["condition_list"]["both_correct"]:
+        both_correct_data.append(cmp1_rationale[id])
+    for id in cmp1_gd["condition_list"]["both_wrong"]:
+        both_wrong_data.append(cmp1_rationale[id])
+    for id in cmp1_gd["condition_list"]["inter_correct"]:
+        inter_correct_data.append(cmp1_rationale[id])
+    for id in cmp1_gd["condition_list"]["exter_correct"]:
+        exter_correct_data.append(cmp1_rationale[id])
+    if args.save:
+        common_utils.jdump(both_correct_data, f"{args.datapath}experiments/{args.rag_model}/{args.dataset_name}/exp_{args.experiment_date}/both_correct.json")
+        common_utils.jdump(both_wrong_data, f"{args.datapath}experiments/{args.rag_model}/{args.dataset_name}/exp_{args.experiment_date}/both_wrong.json")
+        common_utils.jdump(inter_correct_data, f"{args.datapath}experiments/{args.rag_model}/{args.dataset_name}/exp_{args.experiment_date}/inter_correct.json")
+        common_utils.jdump(exter_correct_data, f"{args.datapath}experiments/{args.rag_model}/{args.dataset_name}/exp_{args.experiment_date}/exter_correct.json")
+        print(f"Saved data to the path {args.datapath}experiments/{args.rag_model}/{args.dataset_name}/exp_{args.experiment_date}")
+
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument('--dataset_name', type=str, help='Name of the dataset')
+    parser.add_argument('--task_type', type=str, choices=['check_diff', 'check_train'], default='check_diff', help='Task type: check_diff or check_train')
     parser.add_argument('--cmp1_name', type=str, default='', help='Name of the cmp1 dataset')
     parser.add_argument('--cmp2_name', type=str, default='', help='Name of the cmp2 dataset')
     parser.add_argument('--rag_model', type=str, choices=['InstructRAG-FT', 'InstructRAG-ICL'], default='InstructRAG-FT', help='InstructRAG model: InstructRAG-FT or InstructRAG-ICL')
@@ -93,6 +119,10 @@ if __name__ == "__main__":
     parser.add_argument('--max_instances', type=int, help='Maximum number of instances to compare', default=sys.maxsize)
     parser.add_argument('--experiment_date', type=str, help='Date of the experiment')
     parser.add_argument('--save', type=bool, help='Save the result', default=False)
+    parser.add_argument('--check_version', type=str, help='Version of the check', default='r6')
 
     args = parser.parse_args()
-    check_diff(args)
+    if args.task_type == 'check_train':
+        check_train(args)
+    elif args.task_type == 'check_diff':
+        check_diff(args)

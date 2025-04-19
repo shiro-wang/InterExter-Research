@@ -101,6 +101,7 @@ def eval_model(args):
     elif args.rag_model == 'InstructRAG-ICL':
         if not args.do_vanilla:
             if args.do_inter_exter:
+                # demos = []
                 demos = common_utils.jload(args.datapath + f'eval_results/{args.rag_model}/{args.dataset_name}/with_rationale/demos_inter_exter_{args.demo_version}.json')
             else:
                 demos = common_utils.jload(args.datapath + f'dataset/{args.dataset_name}/demos.json') # f'dataset/{args.dataset_name}/demos.json' # f'eval_results/{args.rag_model}/{args.dataset_name}/with_rationale/demos_inter_exter.json')
@@ -128,7 +129,8 @@ def eval_model(args):
                                     stop_token_ids=[tokenizer.eos_token_id, tokenizer.convert_tokens_to_ids("<|eot_id|>")])
     if args.lora:
         outputs = llm.generate(prompts, sampling_params, lora_request=LoRARequest("popqa_adapter", 1, lora_path))
-    outputs = llm.generate(prompts, sampling_params)
+    else:
+        outputs = llm.generate(prompts, sampling_params)
     
     if args.do_inter_exter:
         output_file = os.path.join(args.output_dir, f"{args.output_file}_{args.version}.json")
@@ -196,6 +198,7 @@ if __name__ == "__main__":
     parser.add_argument('--do_internal_generation', action='store_true', help='Generate internal knowledge')
     parser.add_argument('--do_rationale_generation', action='store_true', help='Generate rationales')
     parser.add_argument('--do_rationale_generation_predefined', action='store_true', help='Generate rationales on predefined data')
+    parser.add_argument('--do_rationale_generation_icl', action='store_true', help='Generate rationales on ICL data')
     parser.add_argument('--do_inter_exter', type=bool, default=False, help='Generate internal and external knowledge')
     parser.add_argument('--do_vanilla', type=bool, default=False, help='Generate vanilla outputs')
     parser.add_argument('--version', type=str, default='', help='Version of the dataset')

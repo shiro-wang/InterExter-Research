@@ -42,7 +42,7 @@ Use the following script to evaluate InstructRAG in both training-free and train
 conda activate instrag
 bash eval.sh
 ```
-## Deepspeed 
+## Deepspeed + Trainer + Lora
 - Mismatch between deepspeed and hf
     - ds train_micro_batch_size_per_gpu=1 vs hf per_device_train_batch_size=8
     - ds train_batch_size=256 vs hf train_batch_size (calculated)=16
@@ -51,16 +51,40 @@ bash eval.sh
     - ds scheduler.params.warmup_max_lr=2.5e-05 vs hf learning_rate=5e-05
     - ds bf16.enabled=True vs hf bf16|bf16_full_eval=False
 - cuda version
-    - File "/dataspace/P76124574/miniconda3/envs/instrag/lib/python3.10/site-packages/deepspeed/ops/op_builder/builder.py", line 110, in assert_no_cuda_mismatch
-    raise CUDAMismatchException(deepspeed.ops.op_builder.builder.CUDAMismatchException: >- DeepSpeed Op Builder: Installed CUDA version 11.7 does not match the version torch was compiled with 12.1, unable to compile cuda/cpp extensions without a matching cuda version.
-    - You can disable this error by removing/commenting the Exception
-    - Or add export DS_SKIP_CUDA_CHECK=1
+    - In my case, with transformers=4.41.2 and deepspeed=0.15.4, you may encounter the following error:
+    ```site-packages/deepspeed/ops/op_builder/builder.py", line 110, in assert_no_cuda_mismatch
+        raise CUDAMismatchException(deepspeed.ops.op_builder.builder.CUDAMismatchException: >- DeepSpeed Op Builder: Installed CUDA version 11.7 does not match the version torch was compiled with 12.1, unable to compile cuda/cpp extensions without a matching cuda version.
+    ```
+    - There are two possible solutions:
+    1. Directly comment out the line that raises the exception error.
+    2. Set the environment variable DS_SKIP_CUDA_CHECK=1 (although this did not work for me).
 - lr scheduler don't have cosine
     - cosine -> WarmupCosineLR
     - warmup_min_lr -> X
     - ds scheduler.params.warmup_num_steps=400 vs hf warmup_steps=3
     - TypeError: deepspeed.runtime.lr_schedules.WarmupCosineLR() argument after ** must be a mapping, not NoneType
     - ds scheduler.params.total_num_steps=256 vs hf num_training_steps (calculated)=100
+### Integration Issue Between Deepspeed and PEFT
+- LoRA is implemented by creating smaller matrices and training them without modifying the base model. However, when integrated with Deepspeed, the gradients from the returned loss may be discarded, which causes an error when trying to compute gradients.
+- Based on [community discussions](https://discuss.huggingface.co/t/peft-lora-gpt-neox-backward-pass-failing/35641), this issue can be resolved using a hook:
+    ```
+    model = get_peft_model(model, lora_config)
+    model.print_trainable_parameters()
+
+    if hasattr(model, "enable_input_require_grads"):
+        model.enable_input_require_grads()
+    else:
+        def make_inputs_require_grad(module, input, output):
+            output.requires_grad_(True)
+        model.get_input_embeddings().register_forward_hook(make_inputs_require_grad)
+    ```
+### Vllm inference with lora
+- Methods:
+    ```
+    llm = LLM(model=args.model_name_or_path, download_dir=args.cache_dir, max_model_len=args.max_tokens, enable_lora=True)
+    outputs = llm.generate(prompts, sampling_params, lora_request=LoRARequest("popqa_adapter", 1, lora_path))
+    ```
+
 ### Notice
 1. When using Zero2 with Hugging Face (HF), apart from settings related to zero_optimization, all other configurations—such as optimizer, scheduler, and data types (fp16, bf16, etc.)—should, as much as possible, not be set in the DeepSpeed config file. Instead, they should be specified in the execution command, following the behavior of the HF Trainer, using arguments like lr_scheduler_type, learning_rate, bf16 True, and so on.
 

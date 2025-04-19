@@ -10,8 +10,8 @@ DEEPSPEED_CONFIG_PATH=configs/deepspeed_config.json
 CUDA_VISIBLE_DEVICES="2,3" torchrun --nproc_per_node=$NUM_DEVICE src/finetune.py \
   --model_name_or_path meta-llama/Meta-Llama-3-8B-Instruct \
   --dataset_name $DATASET \
-  --train_file_name train_inter_exter_v4_r6 \
-  --output_dir ${DATAPATH}/saved_checkpoints/InstructRAG-FT/${DATASET}_z2_b256_e2_4096_lora \
+  --train_file_name train_inter_exter_v4_r7_icl \
+  --output_dir ${DATAPATH}/saved_checkpoints/InstructRAG-FT/${DATASET}_z2_b256_e2_4096_lora_r7_icl_v2 \
   --num_train_epochs 2 \
   --n_docs 5 \
   --logging_steps 1 \
